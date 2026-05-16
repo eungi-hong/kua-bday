@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>🐦 FLAPPY CHONG 🐦</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bungee+Shade&family=Comic+Neue:wght@700&display=swap');
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background:
+      radial-gradient(circle at 30% 20%, #fff 0%, transparent 25%),
+      radial-gradient(circle at 70% 10%, #fff 0%, transparent 18%),
+      linear-gradient(to bottom, #6ec6ff 0%, #b3e5fc 60%, #ffe0b2 100%);
+    font-family: 'Comic Neue', 'Comic Sans MS', cursive;
+    color: #2b0000;
+    overflow: hidden;
+  }
+
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    padding: 10px;
+  }
+
+  h1 {
+    font-family: 'Bungee Shade', cursive;
+    color: #ff1744;
+    text-shadow: 3px 3px 0 #fff200, 5px 5px 0 #000;
+    margin: 8px 0;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    letter-spacing: 2px;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .back-link {
+    font-family: 'Bungee Shade', cursive;
+    text-decoration: none;
+    background: #fff200;
+    color: #000;
+    padding: 8px 14px;
+    border: 3px solid #000;
+    border-radius: 12px;
+    box-shadow: 4px 4px 0 #ff1744;
+    font-size: 0.95rem;
+  }
+  .back-link:hover { transform: rotate(-2deg) scale(1.05); }
+
+  #wrapper {
+    position: relative;
+    border: 6px solid #000;
+    border-radius: 16px;
+    box-shadow: 10px 10px 0 #ff1744;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #6ec6ff, #b3e5fc 70%, #ffe0b2);
+  }
+
+  canvas {
+    display: block;
+    background: transparent;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    z-index: 5;
+  }
+  #overlay h2 {
+    font-family: 'Bungee Shade', cursive;
+    color: #ff1744;
+    margin: 6px 0;
+    font-size: 2rem;
+    text-shadow: 2px 2px 0 #fff200;
+  }
+  #overlay p { font-size: 1.05rem; font-weight: 700; margin: 4px 0; }
+  #overlay button {
+    font-family: 'Bungee Shade', cursive;
+    margin-top: 14px;
+    font-size: 1.2rem;
+    padding: 14px 26px;
+    background: #00e676;
+    color: #000;
+    border: 4px solid #000;
+    border-radius: 14px;
+    box-shadow: 6px 6px 0 #000;
+    cursor: pointer;
+  }
+  #overlay button:hover { transform: translate(-2px,-2px); }
+  #overlay .roast { font-style: italic; color: #b71c1c; margin-top: 10px; max-width: 320px; }
+
+  .scoreboard {
+    margin-top: 6px;
+    font-family: 'Bungee Shade', cursive;
+    font-size: 1.1rem;
+    color: #000;
+    background: #fff;
+    padding: 6px 14px;
+    border: 3px solid #000;
+    border-radius: 12px;
+  }
+
+  .controls {
+    margin-top: 8px;
+    font-weight: 900;
+    font-size: 0.95rem;
+    text-align: center;
+    background: rgba(255,255,255,0.8);
+    padding: 6px 14px;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top-bar">
+    <a href="index.html" class="back-link">⬅ BACK TO BDAY</a>
+    <h1>🐦 FLAPPY CHONG 🐦</h1>
+  </div>
+
+  <div class="scoreboard">SCORE: <span id="score">0</span> &nbsp; HIGH: <span id="high">0</span></div>
+
+  <div id="wrapper">
+    <canvas id="game" width="420" height="600"></canvas>
+    <div id="overlay">
+      <h2>FLAPPY CHONG</h2>
+      <p>tap / click / press SPACE to flap</p>
+      <p>avoid the chilli sauce 🍾 and the mayo 🫙</p>
+      <p>he is doing his best. please help him.</p>
+      <button id="startBtn">START FLAPPING</button>
+      <p class="roast">happy birthday chong, hope you score higher than your friends 🌶️🥚</p>
+    </div>
+  </div>
+
+  <div class="controls">SPACE / CLICK / TAP = flap 🐦</div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const scoreEl = document.getElementById('score');
+  const highEl = document.getElementById('high');
+
+  const W = canvas.width;
+  const H = canvas.height;
+
+  const chongImg = new Image();
+  chongImg.src = '4b8f8a39-aee4-4610-9115-07e936b831fa-removebg-preview%20(1).png';
+
+  let imgReady = false;
+  chongImg.onload = () => { imgReady = true; };
+
+  // Game state
+  let bird, pipes, score, alive, frame, started, waitingFirstFlap;
+  let highScore = Number(localStorage.getItem('flappyChongHigh') || 0);
+  highEl.textContent = highScore;
+
+  const GRAVITY = 0.22;
+  const FLAP = -6.2;
+  const PIPE_GAP = 270;
+  const PIPE_WIDTH = 78;
+  const PIPE_SPEED = 1.4;
+  const PIPE_SPACING = 340; // distance between pipe pairs
+  const FIRST_PIPE_OFFSET = 260; // extra runway before first pipe appears
+
+  function reset() {
+    bird = {
+      x: 100,
+      y: H / 2 - 40, // start a bit higher
+      vy: 0,
+      r: 22, // collision radius (forgiving)
+      size: 78, // draw size
+      rot: 0,
+      bobT: 0
+    };
+    pipes = [];
+    for (let i = 0; i < 3; i++) {
+      spawnPipe(W + FIRST_PIPE_OFFSET + i * PIPE_SPACING);
+    }
+    score = 0;
+    frame = 0;
+    alive = true;
+    waitingFirstFlap = true;
+    scoreEl.textContent = '0';
+  }
+
+  function spawnPipe(x) {
+    const margin = 70;
+    const topHeight = margin + Math.random() * (H - PIPE_GAP - margin * 2);
+    pipes.push({ x, topHeight, passed: false });
+  }
+
+  function flap() {
+    if (!started) return;
+    if (!alive) return;
+    if (waitingFirstFlap) waitingFirstFlap = false;
+    bird.vy = FLAP;
+    flapSound();
+  }
+
+  function startGame() {
+    reset();
+    started = true;
+    overlay.style.display = 'none';
+    requestAnimationFrame(loop);
+  }
+
+  function gameOver() {
+    alive = false;
+    started = false;
+    hitSound();
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('flappyChongHigh', String(highScore));
+      highEl.textContent = highScore;
+    }
+    overlay.innerHTML = `
+      <h2>💀 SPLAT 💀</h2>
+      <p>score: <b>${score}</b></p>
+      <p>high score: <b>${highScore}</b></p>
+      <button id="startBtn">FLAP AGAIN</button>
+      <p class="roast">${pickRoast(score)}</p>
+    `;
+    overlay.style.display = 'flex';
+    document.getElementById('startBtn').addEventListener('click', startGame);
+  }
+
+  function pickRoast(s) {
+    if (s === 0) return "zero points. did you even try. wints is judging you.";
+    if (s < 3)  return "rough. maybe stick to dipping fries.";
+    if (s < 7)  return "decent. the mayo gods are mildly amused.";
+    if (s < 15) return "respectable. chilli sauce sponsorship pending.";
+    if (s < 25) return "elite flapper. wints has accepted you as kin.";
+    return "ARE YOU OK?? please drink water, that's a lot of flapping.";
+  }
+
+  // ---- Drawing ----
+
+  function drawBackground() {
+    // sky already from CSS; add some clouds
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let i = 0; i < 4; i++) {
+      const cx = (i * 200 - (frame * 0.3) % 200 + W) % (W + 200) - 100;
+      const cy = 60 + i * 90;
+      drawCloud(cx, cy);
+    }
+    // ground
+    ctx.fillStyle = '#ffcc80';
+    ctx.fillRect(0, H - 30, W, 30);
+    ctx.fillStyle = '#a1887f';
+    for (let i = 0; i < W; i += 20) {
+      const offset = (frame * PIPE_SPEED) % 20;
+      ctx.fillRect(i - offset, H - 30, 10, 6);
+    }
+  }
+
+  function drawCloud(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI * 2);
+    ctx.arc(x + 22, y + 4, 18, 0, Math.PI * 2);
+    ctx.arc(x - 20, y + 6, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Chilli sauce bottle (top pipe, pointing down)
+  function drawChilliBottle(x, height) {
+    const w = PIPE_WIDTH;
+    // body of bottle (red)
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, '#b71c1c');
+    grad.addColorStop(0.5, '#ff1744');
+    grad.addColorStop(1, '#7f0000');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, 0, w, height - 30);
+
+    // shoulder (taper)
+    ctx.beginPath();
+    ctx.moveTo(x, height - 30);
+    ctx.lineTo(x + w, height - 30);
+    ctx.lineTo(x + w - 14, height - 12);
+    ctx.lineTo(x + 14, height - 12);
+    ctx.closePath();
+    ctx.fill();
+
+    // nozzle (cap pointing down)
+    ctx.fillStyle = '#212121';
+    ctx.fillRect(x + w/2 - 10, height - 12, 20, 12);
+    // tip drip
+    ctx.fillStyle = '#ff5252';
+    ctx.beginPath();
+    ctx.arc(x + w/2, height + 3, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x + 6, height/2 - 30, w - 12, 50);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 12px "Comic Neue", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CHILLI', x + w/2, height/2 - 12);
+    ctx.fillText('SAUCE', x + w/2, height/2 + 2);
+    ctx.fillStyle = '#ff1744';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('🌶', x + w/2, height/2 + 18);
+
+    // outline
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, 0, w, height - 30);
+  }
+
+  // Mayo bottle (bottom pipe, pointing up)
+  function drawMayoBottle(x, topY) {
+    const w = PIPE_WIDTH;
+    const height = H - topY - 30; // bottom 30 is ground
+
+    // cap (pointing up)
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(x + w/2 - 12, topY, 24, 14);
+
+    // shoulder (taper from cap to body)
+    ctx.fillStyle = '#fffde7';
+    ctx.beginPath();
+    ctx.moveTo(x + 14, topY + 22);
+    ctx.lineTo(x + w - 14, topY + 22);
+    ctx.lineTo(x + w, topY + 40);
+    ctx.lineTo(x, topY + 40);
+    ctx.closePath();
+    ctx.fill();
+
+    // body
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, '#fff9c4');
+    grad.addColorStop(0.5, '#fffde7');
+    grad.addColorStop(1, '#f5f5dc');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, topY + 40, w, height - 40);
+
+    // Label - Kewpie-ish
+    ctx.fillStyle = '#d50000';
+    ctx.fillRect(x + 6, topY + 70, w - 12, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px "Comic Neue", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('MAYO', x + w/2, topY + 100);
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('(extra)', x + w/2, topY + 118);
+
+    // little egg icon
+    ctx.fillStyle = '#fff59d';
+    ctx.beginPath();
+    ctx.ellipse(x + w/2, topY + 145, 10, 14, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // outline
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, topY + 40, w, height - 40);
+    ctx.strokeRect(x + 14, topY + 14, w - 28, 8);
+  }
+
+  function drawBird() {
+    ctx.save();
+    ctx.translate(bird.x, bird.y);
+    ctx.rotate(bird.rot);
+    if (imgReady) {
+      ctx.drawImage(chongImg, -bird.size/2, -bird.size/2, bird.size, bird.size);
+    } else {
+      // fallback yellow circle if image not loaded yet
+      ctx.fillStyle = '#ffeb3b';
+      ctx.beginPath();
+      ctx.arc(0, 0, bird.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ---- Loop ----
+  function loop() {
+    if (!alive) return;
+    frame++;
+
+    if (waitingFirstFlap) {
+      // gentle bob, no gravity, no pipes moving
+      bird.bobT += 0.08;
+      bird.y = (H / 2 - 40) + Math.sin(bird.bobT) * 8;
+      bird.rot = Math.sin(bird.bobT) * 0.1;
+
+      ctx.clearRect(0, 0, W, H);
+      drawBackground();
+      for (const p of pipes) {
+        drawChilliBottle(p.x, p.topHeight);
+        drawMayoBottle(p.x, p.topHeight + PIPE_GAP);
+      }
+      drawBird();
+
+      // prompt
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.font = 'bold 26px "Bungee Shade", sans-serif';
+      ctx.textAlign = 'center';
+      const pulse = 0.7 + 0.3 * Math.abs(Math.sin(frame * 0.08));
+      ctx.globalAlpha = pulse;
+      ctx.fillText('TAP / SPACE to start', W/2, H/2 + 120);
+      ctx.font = 'bold 16px "Comic Neue", sans-serif';
+      ctx.fillText('🐦 flap flap flap 🐦', W/2, H/2 + 150);
+      ctx.restore();
+
+      return requestAnimationFrame(loop);
+    }
+
+    // physics
+    bird.vy += GRAVITY;
+    if (bird.vy > 8) bird.vy = 8; // terminal velocity cap
+    bird.y += bird.vy;
+    bird.rot = Math.max(-0.5, Math.min(1.2, bird.vy / 14));
+
+    // pipes
+    for (const p of pipes) p.x -= PIPE_SPEED;
+
+    // remove off-screen, spawn new
+    if (pipes[0].x + PIPE_WIDTH < 0) {
+      pipes.shift();
+      const lastX = pipes[pipes.length - 1].x;
+      spawnPipe(lastX + PIPE_SPACING);
+    }
+
+    // score
+    for (const p of pipes) {
+      if (!p.passed && p.x + PIPE_WIDTH < bird.x) {
+        p.passed = true;
+        score++;
+        scoreEl.textContent = score;
+        pointSound();
+      }
+    }
+
+    // collisions
+    if (bird.y + bird.r > H - 30 || bird.y - bird.r < 0) {
+      bird.y = Math.min(bird.y, H - 30 - bird.r);
+      return gameOver();
+    }
+
+    for (const p of pipes) {
+      const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_WIDTH;
+      if (inX) {
+        const gapTop = p.topHeight;
+        const gapBottom = p.topHeight + PIPE_GAP;
+        if (bird.y - bird.r < gapTop || bird.y + bird.r > gapBottom) {
+          return gameOver();
+        }
+      }
+    }
+
+    // draw
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    for (const p of pipes) {
+      drawChilliBottle(p.x, p.topHeight);
+      drawMayoBottle(p.x, p.topHeight + PIPE_GAP);
+    }
+    drawBird();
+
+    // big score in middle background
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 64px "Bungee Shade", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(score, W/2, 90);
+    ctx.restore();
+
+    requestAnimationFrame(loop);
+  }
+
+  // ---- Input ----
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      if (!started && alive === undefined) startGame();
+      else if (!started && !alive) startGame();
+      else flap();
+    }
+  });
+  canvas.addEventListener('mousedown', flap);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); }, { passive: false });
+
+  startBtn.addEventListener('click', startGame);
+
+  // ---- Sounds (WebAudio) ----
+  let audioCtx;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e) {}
+    }
+  }
+  function tone(freq, dur, type, gainVal=0.12) {
+    ensureAudio();
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    g.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur);
+  }
+  function flapSound() { tone(620, 0.08, 'square'); }
+  function pointSound() {
+    tone(880, 0.07, 'triangle', 0.15);
+    setTimeout(() => tone(1320, 0.1, 'triangle', 0.13), 70);
+  }
+  function hitSound() {
+    tone(180, 0.18, 'sawtooth', 0.2);
+    setTimeout(() => tone(90, 0.3, 'square', 0.2), 120);
+  }
+
+  // first frame draw
+  function preview() {
+    ctx.clearRect(0,0,W,H);
+    drawBackground();
+    // a teaser chilli + mayo
+    drawChilliBottle(W/2 - PIPE_WIDTH/2, 200);
+    drawMayoBottle(W/2 - PIPE_WIDTH/2, 200 + PIPE_GAP);
+    // bird in middle
+    const tmpBird = { x: W/2, y: H/2 + 20, rot: 0 };
+    ctx.save();
+    ctx.translate(tmpBird.x, tmpBird.y);
+    if (imgReady) {
+      ctx.drawImage(chongImg, -39, -39, 78, 78);
+    }
+    ctx.restore();
+  }
+
+  chongImg.onload = () => {
+    imgReady = true;
+    preview();
+  };
+  preview();
+})();
+</script>
+</body>
+</html>
