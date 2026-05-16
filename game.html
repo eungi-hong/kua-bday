@@ -132,6 +132,50 @@
     padding: 6px 14px;
     border-radius: 10px;
   }
+
+  .diff-picker {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .diff-picker button {
+    font-family: 'Bungee Shade', cursive;
+    font-size: 0.9rem;
+    padding: 8px 14px;
+    border: 3px solid #000;
+    border-radius: 10px;
+    cursor: pointer;
+    background: #fff;
+    color: #000;
+    box-shadow: 3px 3px 0 #000;
+    transition: transform 0.08s ease;
+  }
+  .diff-picker button:hover { transform: translate(-1px,-1px); }
+  .diff-picker button.active {
+    background: #ff1744;
+    color: #fff200;
+    text-shadow: 1px 1px 0 #000;
+    box-shadow: 3px 3px 0 #fff200, 3px 3px 0 5px #000;
+  }
+  .diff-picker button[data-diff="chong"] {
+    background: #6a1b9a;
+    color: #fff200;
+  }
+  .diff-picker button[data-diff="chong"].active {
+    background: #d500f9;
+  }
+  .diff-label {
+    font-family: 'Bungee Shade', cursive;
+    font-size: 0.85rem;
+    color: #6a1b00;
+    margin-bottom: 4px;
+  }
+  .scoreboard .diff-current {
+    color: #ff1744;
+    margin-left: 8px;
+  }
 </style>
 </head>
 <body>
@@ -141,7 +185,10 @@
     <h1>🐦 FLAPPY CHONG 🐦</h1>
   </div>
 
-  <div class="scoreboard">SCORE: <span id="score">0</span> &nbsp; HIGH: <span id="high">0</span></div>
+  <div class="scoreboard">
+    SCORE: <span id="score">0</span> &nbsp; HIGH: <span id="high">0</span>
+    <span class="diff-current">[<span id="diffCurrent">EASY</span>]</span>
+  </div>
 
   <div id="wrapper">
     <canvas id="game" width="420" height="600"></canvas>
@@ -149,7 +196,13 @@
       <h2>FLAPPY CHONG</h2>
       <p>tap / click / press SPACE to flap</p>
       <p>avoid the chilli sauce 🍾 and the mayo 🫙</p>
-      <p>he is doing his best. please help him.</p>
+      <div class="diff-label">PICK YOUR DIFFICULTY</div>
+      <div class="diff-picker" id="diffPicker">
+        <button data-diff="easy">EASY</button>
+        <button data-diff="medium">MEDIUM</button>
+        <button data-diff="hard">HARD</button>
+        <button data-diff="chong">CHONG MODE</button>
+      </div>
       <button id="startBtn">START FLAPPING</button>
       <p class="roast">happy birthday chong, hope you score higher than your friends 🌶️🥚</p>
     </div>
@@ -176,32 +229,63 @@
   let imgReady = false;
   chongImg.onload = () => { imgReady = true; };
 
+  // Difficulty presets
+  const DIFFICULTIES = {
+    easy:   { label: 'EASY',       gravity: 0.22, flap: -6.2, gap: 270, speed: 1.4, spacing: 340, firstOffset: 260, hitR: 22 },
+    medium: { label: 'MEDIUM',     gravity: 0.32, flap: -7.0, gap: 210, speed: 2.0, spacing: 280, firstOffset: 200, hitR: 26 },
+    hard:   { label: 'HARD',       gravity: 0.45, flap: -8.0, gap: 165, speed: 2.8, spacing: 230, firstOffset: 160, hitR: 30 },
+    chong:  { label: 'CHONG MODE', gravity: 0.55, flap: -8.6, gap: 135, speed: 3.4, spacing: 200, firstOffset: 140, hitR: 32 }
+  };
+  const PIPE_WIDTH = 78;
+
+  let currentDiff = localStorage.getItem('flappyChongDiff') || 'easy';
+  if (!DIFFICULTIES[currentDiff]) currentDiff = 'easy';
+  let cfg = DIFFICULTIES[currentDiff];
+
   // Game state
   let bird, pipes, score, alive, frame, started, waitingFirstFlap;
-  let highScore = Number(localStorage.getItem('flappyChongHigh') || 0);
-  highEl.textContent = highScore;
 
-  const GRAVITY = 0.22;
-  const FLAP = -6.2;
-  const PIPE_GAP = 270;
-  const PIPE_WIDTH = 78;
-  const PIPE_SPEED = 1.4;
-  const PIPE_SPACING = 340; // distance between pipe pairs
-  const FIRST_PIPE_OFFSET = 260; // extra runway before first pipe appears
+  function highKey(d) { return 'flappyChongHigh_' + d; }
+  function getHigh(d) { return Number(localStorage.getItem(highKey(d)) || 0); }
+  function refreshHighDisplay() { highEl.textContent = getHigh(currentDiff); }
+
+  const diffCurrentEl = document.getElementById('diffCurrent');
+  const diffPicker = document.getElementById('diffPicker');
+
+  function setDifficulty(d) {
+    if (!DIFFICULTIES[d]) return;
+    currentDiff = d;
+    cfg = DIFFICULTIES[d];
+    localStorage.setItem('flappyChongDiff', d);
+    diffCurrentEl.textContent = cfg.label;
+    refreshHighDisplay();
+    // mark active button
+    diffPicker.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.diff === d);
+    });
+  }
+
+  diffPicker.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-diff]');
+    if (!btn) return;
+    setDifficulty(btn.dataset.diff);
+  });
+
+  setDifficulty(currentDiff);
 
   function reset() {
     bird = {
       x: 100,
       y: H / 2 - 40, // start a bit higher
       vy: 0,
-      r: 22, // collision radius (forgiving)
+      r: cfg.hitR,
       size: 78, // draw size
       rot: 0,
       bobT: 0
     };
     pipes = [];
     for (let i = 0; i < 3; i++) {
-      spawnPipe(W + FIRST_PIPE_OFFSET + i * PIPE_SPACING);
+      spawnPipe(W + cfg.firstOffset + i * cfg.spacing);
     }
     score = 0;
     frame = 0;
@@ -212,7 +296,7 @@
 
   function spawnPipe(x) {
     const margin = 70;
-    const topHeight = margin + Math.random() * (H - PIPE_GAP - margin * 2);
+    const topHeight = margin + Math.random() * (H - cfg.gap - margin * 2);
     pipes.push({ x, topHeight, passed: false });
   }
 
@@ -220,7 +304,7 @@
     if (!started) return;
     if (!alive) return;
     if (waitingFirstFlap) waitingFirstFlap = false;
-    bird.vy = FLAP;
+    bird.vy = cfg.flap;
     flapSound();
   }
 
@@ -235,19 +319,43 @@
     alive = false;
     started = false;
     hitSound();
-    if (score > highScore) {
-      highScore = score;
-      localStorage.setItem('flappyChongHigh', String(highScore));
-      highEl.textContent = highScore;
+    const prevHigh = getHigh(currentDiff);
+    let isNewHigh = false;
+    if (score > prevHigh) {
+      localStorage.setItem(highKey(currentDiff), String(score));
+      isNewHigh = true;
     }
+    refreshHighDisplay();
+
     overlay.innerHTML = `
       <h2>💀 SPLAT 💀</h2>
-      <p>score: <b>${score}</b></p>
-      <p>high score: <b>${highScore}</b></p>
+      <p>difficulty: <b>${cfg.label}</b></p>
+      <p>score: <b>${score}</b>${isNewHigh ? ' 🎉 <span style="color:#d500f9">NEW HIGH!</span>' : ''}</p>
+      <p>high score: <b>${getHigh(currentDiff)}</b></p>
+      <div class="diff-label">CHANGE DIFFICULTY</div>
+      <div class="diff-picker" id="diffPicker2">
+        <button data-diff="easy">EASY</button>
+        <button data-diff="medium">MEDIUM</button>
+        <button data-diff="hard">HARD</button>
+        <button data-diff="chong">CHONG MODE</button>
+      </div>
       <button id="startBtn">FLAP AGAIN</button>
       <p class="roast">${pickRoast(score)}</p>
     `;
     overlay.style.display = 'flex';
+    // wire up the new picker inside the game-over overlay
+    const picker2 = document.getElementById('diffPicker2');
+    picker2.querySelectorAll('button').forEach(b => {
+      if (b.dataset.diff === currentDiff) b.classList.add('active');
+      b.addEventListener('click', () => {
+        currentDiff = b.dataset.diff;
+        cfg = DIFFICULTIES[currentDiff];
+        localStorage.setItem('flappyChongDiff', currentDiff);
+        diffCurrentEl.textContent = cfg.label;
+        refreshHighDisplay();
+        picker2.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.diff === currentDiff));
+      });
+    });
     document.getElementById('startBtn').addEventListener('click', startGame);
   }
 
@@ -275,7 +383,7 @@
     ctx.fillRect(0, H - 30, W, 30);
     ctx.fillStyle = '#a1887f';
     for (let i = 0; i < W; i += 20) {
-      const offset = (frame * PIPE_SPEED) % 20;
+      const offset = (frame * cfg.speed) % 20;
       ctx.fillRect(i - offset, H - 30, 10, 6);
     }
   }
@@ -422,7 +530,7 @@
       drawBackground();
       for (const p of pipes) {
         drawChilliBottle(p.x, p.topHeight);
-        drawMayoBottle(p.x, p.topHeight + PIPE_GAP);
+        drawMayoBottle(p.x, p.topHeight + cfg.gap);
       }
       drawBird();
 
@@ -435,26 +543,27 @@
       ctx.globalAlpha = pulse;
       ctx.fillText('TAP / SPACE to start', W/2, H/2 + 120);
       ctx.font = 'bold 16px "Comic Neue", sans-serif';
-      ctx.fillText('🐦 flap flap flap 🐦', W/2, H/2 + 150);
+      ctx.fillText('🐦 flap flap flap 🐦 (' + cfg.label + ')', W/2, H/2 + 150);
       ctx.restore();
 
       return requestAnimationFrame(loop);
     }
 
     // physics
-    bird.vy += GRAVITY;
-    if (bird.vy > 8) bird.vy = 8; // terminal velocity cap
+    bird.vy += cfg.gravity;
+    const termV = Math.max(8, Math.abs(cfg.flap) * 1.4);
+    if (bird.vy > termV) bird.vy = termV;
     bird.y += bird.vy;
     bird.rot = Math.max(-0.5, Math.min(1.2, bird.vy / 14));
 
     // pipes
-    for (const p of pipes) p.x -= PIPE_SPEED;
+    for (const p of pipes) p.x -= cfg.speed;
 
     // remove off-screen, spawn new
     if (pipes[0].x + PIPE_WIDTH < 0) {
       pipes.shift();
       const lastX = pipes[pipes.length - 1].x;
-      spawnPipe(lastX + PIPE_SPACING);
+      spawnPipe(lastX + cfg.spacing);
     }
 
     // score
@@ -477,7 +586,7 @@
       const inX = bird.x + bird.r > p.x && bird.x - bird.r < p.x + PIPE_WIDTH;
       if (inX) {
         const gapTop = p.topHeight;
-        const gapBottom = p.topHeight + PIPE_GAP;
+        const gapBottom = p.topHeight + cfg.gap;
         if (bird.y - bird.r < gapTop || bird.y + bird.r > gapBottom) {
           return gameOver();
         }
@@ -489,7 +598,7 @@
     drawBackground();
     for (const p of pipes) {
       drawChilliBottle(p.x, p.topHeight);
-      drawMayoBottle(p.x, p.topHeight + PIPE_GAP);
+      drawMayoBottle(p.x, p.topHeight + cfg.gap);
     }
     drawBird();
 
@@ -556,7 +665,7 @@
     drawBackground();
     // a teaser chilli + mayo
     drawChilliBottle(W/2 - PIPE_WIDTH/2, 200);
-    drawMayoBottle(W/2 - PIPE_WIDTH/2, 200 + PIPE_GAP);
+    drawMayoBottle(W/2 - PIPE_WIDTH/2, 200 + cfg.gap);
     // bird in middle
     const tmpBird = { x: W/2, y: H/2 + 20, rot: 0 };
     ctx.save();
